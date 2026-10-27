@@ -17,6 +17,7 @@ import { LegacyBackendError } from '@/services/api/legacyBackendProbe';
 import { DotMatrixHero } from './login/DotMatrixHero';
 import { LoginForm } from './login/LoginForm';
 import { resolveLoginRedirect } from '@/router/loginRedirect';
+import { BootLoader } from '@/components/layout/BootLoader';
 import styles from './LoginPage.module.scss';
 
 export type LoginPhase = 'idle' | 'connecting' | 'success' | 'exiting';
@@ -276,16 +277,8 @@ export function LoginPage() {
 
         <main className={styles.main}>
           {showSplash ? (
-            <div className={styles.splash} role="status" aria-live="polite">
-              <img src={INLINE_LOGO_JPEG} alt="" className={styles.splashLogo} />
-              <div className={styles.splashText}>
-                <h1 className={styles.splashTitle}>{t('splash.title')}</h1>
-                <p className={styles.splashSubtitle}>{t('splash.subtitle')}</p>
-              </div>
-              <div className={styles.splashLoader} aria-hidden="true">
-                <div className={styles.splashLoaderBar} />
-              </div>
-            </div>
+            // Fork: session restore shows the plain full-screen loader, not the branded splash.
+            <BootLoader />
           ) : (
             <div className={styles.column}>
               <h1 className={styles.title}>{t('splash.subtitle')}</h1>
