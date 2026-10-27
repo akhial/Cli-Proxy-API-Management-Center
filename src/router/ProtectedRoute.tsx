@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactElement } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/stores';
-import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { BootLoader } from '@/components/layout/BootLoader';
 
 export function ProtectedRoute({ children }: { children: ReactElement }) {
   const location = useLocation();
@@ -26,11 +26,7 @@ export function ProtectedRoute({ children }: { children: ReactElement }) {
   }, [apiBase, isAuthenticated, managementKey, checkAuth]);
 
   if (checking) {
-    return (
-      <div className="main-content">
-        <LoadingSpinner />
-      </div>
-    );
+    return <BootLoader />;
   }
 
   if (!isAuthenticated) {
