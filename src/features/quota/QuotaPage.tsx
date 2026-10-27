@@ -19,15 +19,19 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { useHeaderRefresh } from '@/hooks/useHeaderRefresh';
 import { useNow } from '@/hooks/useNow';
 import { useRevealGroup } from '@/hooks/motion';
-import { useAuthStore, useQuotaStore, useThemeStore } from '@/stores';
+import { useAuthStore, useConfigStore, useQuotaStore, useThemeStore } from '@/stores';
+import type { QuotaHistory } from '@/services/api/quotaHistory';
 import type { AuthFileItem, ResolvedTheme } from '@/types';
-import { getQuotaCacheKey } from '@/utils/quota/identity';
+import { getQuotaCacheKey, getQuotaDisplayName } from '@/utils/quota/identity';
 import { ProviderTabs } from '@/features/authFiles/components/ProviderTabs';
 import { QuotaHeader } from './components/QuotaHeader';
-import { QuotaCard } from './components/QuotaCard';
+import { AccountsTable } from './accounts/AccountsTable';
+import { WEEKLY_RESET_STRATEGY } from './accounts/rowModel';
 import { QuotaTimeline } from './components/QuotaTimeline';
+import { maskEmails } from './emailMask';
+import { QuotaForecastSection } from './forecast/QuotaForecastSection';
+import { useForecastPrefs } from './forecast/prefs';
 import {
-  CARD_ENTRANCE_BUDGET_MS,
   QUOTA_PAGE_SIZE,
   QUOTA_SORT_MODES,
   QUOTA_TAB_ORDER,
@@ -54,13 +58,7 @@ import { readQuotaUiState, writeQuotaUiState } from './uiState';
 import styles from './QuotaPage.module.scss';
 
 const TAB_IDS: string[] = ['all', ...QUOTA_TAB_ORDER];
-const SKELETON_CARD_COUNT = 6;
-
-/**
- * Existing providers display filenames; Devin's card and timeline share an
- * identity-aware display label. Keep the filename fallback stable for memoization.
- */
-const displayNameFor = (name: string) => name;
+const SKELETON_ROW_COUNT = 6;
 
 export function QuotaPage() {
   const { t } = useTranslation();
@@ -77,6 +75,10 @@ export function QuotaPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const [forecastPrefs, updateForecastPrefs] = useForecastPrefs();
+  const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
+  // Recorded history, shared by the pool charts and the account rows.
+  const [forecastHistory, setForecastHistory] = useState<QuotaHistory | null>(null);
   // 页头 + tabs 的入场级联（标题 → meta → 动作 → tabs，级差 70ms）
   const revealRef = useRevealGroup<HTMLDivElement>();
 
@@ -173,7 +175,27 @@ export function QuotaPage() {
   const sortNow = sortMode === 'default' ? 0 : tick;
 
   const entries = useMemo(() => classifyQuotaFiles(files), [files]);
+
+  // Emails in account names are masked until "Show emails" is on.
+  const showEmails = forecastPrefs.showEmails;
+  const accountNameFor = useCallback(
+    (entry: QuotaFileEntry): string => {
+      const name = getQuotaDisplayName(entry.file);
+      return showEmails ? name : maskEmails(name, entry.file.email);
+    },
+    [showEmails]
+  );
+  // Existing providers display filenames; Devin's timeline lane keeps its identity label.
+  const displayNameFor = useCallback(
+    (name: string) => (showEmails ? name : maskEmails(name)),
+    [showEmails]
+  );
   const tabCounts = useMemo(() => buildTabCounts(entries), [entries]);
+  // The plugin tab only appears once a plugin credential exists.
+  const visibleTabIds = useMemo(
+    () => TAB_IDS.filter((id) => id !== 'plugin' || (tabCounts[id] ?? 0) > 0 || tab === id),
+    [tab, tabCounts]
+  );
   const filteredEntries = useMemo(
     () => filterEntriesBySearch(filterEntriesByTab(entries, tab), search),
     [entries, tab, search]
@@ -260,6 +282,7 @@ export function QuotaPage() {
   const handleRefreshAll = useCallback(() => {
     if (disableControls) return;
     pendingRefreshRef.current = sessionGeneration;
+    setHistoryRefreshKey((key) => key + 1);
     void loadFiles();
   }, [disableControls, loadFiles, sessionGeneration]);
 
@@ -301,23 +324,17 @@ export function QuotaPage() {
 
   const canUseActions = !disableControls && !loading && filesGeneration === sessionGeneration;
 
-  /* ---------- 首屏卡片一次性级联入场 ----------
-   * 首批数据渲染后立即翻转 cardsAnimated；已挂载的卡片在挂载时捕获过自己的
-   * 延迟（QuotaCard 内 useState 初始化），后续切 tab/翻页/刷新新挂载的卡片
-   * 拿到 null —— 不重播。 */
+  /* ---------- Routing hint ----------
+   * Rows flag accounts the reset-aware routing currently prefers. */
 
-  const [cardsAnimated, setCardsAnimated] = useState(false);
-  const enableCardEntrance = !cardsAnimated && !loading && pageItems.length > 0;
+  const routingStrategy = useConfigStore((state) => state.config?.routingStrategy ?? '');
+  const fetchConfig = useConfigStore((state) => state.fetchConfig);
   useEffect(() => {
-    if (enableCardEntrance) {
-      setCardsAnimated(true);
-    }
-  }, [enableCardEntrance]);
-  const cardEntranceDelay = (index: number): number | null => {
-    if (!enableCardEntrance) return null;
-    if (pageItems.length <= 1) return 0;
-    return Math.round((index / (pageItems.length - 1)) * CARD_ENTRANCE_BUDGET_MS);
-  };
+    if (connectionStatus === 'connected') void fetchConfig().catch(() => undefined);
+  }, [connectionStatus, fetchConfig]);
+  const priorityRouting = [WEEKLY_RESET_STRATEGY, 'weekly-reset-wrr'].includes(
+    routingStrategy.trim().toLowerCase()
+  );
 
   /* ---------- 渲染 ---------- */
 
@@ -332,19 +349,33 @@ export function QuotaPage() {
         refreshing={loading || batchLoading}
         disableControls={disableControls}
         onRefreshAll={handleRefreshAll}
+        showEmails={forecastPrefs.showEmails}
+        onToggleEmails={() => updateForecastPrefs({ showEmails: !forecastPrefs.showEmails })}
       />
 
       <section className={styles.workbench}>
         {/* 提供商导航与搜索工具栏分层，避免不同控件争夺视觉焦点。 */}
         <div className={styles.tabsRow} data-reveal>
           <ProviderTabs
-            types={TAB_IDS}
+            types={visibleTabIds}
             counts={tabCounts}
             active={tab}
             resolvedTheme={resolvedTheme}
             onChange={handleTabChange}
+            variant="pills"
           />
         </div>
+
+        <QuotaForecastSection
+          entries={entries}
+          tab={tab}
+          prefs={forecastPrefs}
+          onPrefsChange={updateForecastPrefs}
+          refreshKey={historyRefreshKey}
+          onHistory={setForecastHistory}
+          enabled={!disableControls && filesGeneration === sessionGeneration}
+          resolvedTheme={resolvedTheme}
+        />
 
         <div className={styles.toolbar}>
           <div className={styles.search}>
@@ -391,9 +422,9 @@ export function QuotaPage() {
         )}
 
         {loading ? (
-          <div className={styles.grid} aria-hidden="true">
-            {Array.from({ length: SKELETON_CARD_COUNT }, (_, index) => (
-              <Skeleton key={index} height={168} rounded={14} />
+          <div className={styles.rowSkeletons} aria-hidden="true">
+            {Array.from({ length: SKELETON_ROW_COUNT }, (_, index) => (
+              <Skeleton key={index} height={74} rounded={12} />
             ))}
           </div>
         ) : isEmpty ? (
@@ -425,21 +456,18 @@ export function QuotaPage() {
             }
           />
         ) : (
-          <div className={styles.grid}>
-            {pageItems.map((entry, index) => (
-              <QuotaCard
-                key={`${entry.type}:${getQuotaCacheKey(entry.file)}`}
-                entry={entry}
-                quota={getQuota(entry)}
-                resolvedTheme={resolvedTheme}
-                canRefresh={canUseActions && !entry.file.disabled}
-                resetting={resettingQuotaName === getQuotaCacheKey(entry.file)}
-                entranceDelayMs={cardEntranceDelay(index)}
-                onRefresh={() => void refreshQuota(entry.file, QUOTA_ADAPTERS[entry.type])}
-                onReset={() => resetQuota(entry.file, QUOTA_ADAPTERS[entry.type])}
-              />
-            ))}
-          </div>
+          <AccountsTable
+            entries={pageItems}
+            quotaFor={getQuota}
+            nameFor={accountNameFor}
+            history={forecastHistory}
+            priorityRouting={priorityRouting}
+            resolvedTheme={resolvedTheme}
+            canUseActions={canUseActions}
+            resettingName={resettingQuotaName}
+            onRefresh={(entry) => void refreshQuota(entry.file, QUOTA_ADAPTERS[entry.type])}
+            onReset={(entry) => resetQuota(entry.file, QUOTA_ADAPTERS[entry.type])}
+          />
         )}
 
         {!loading && filteredEntries.length > QUOTA_PAGE_SIZE && (
