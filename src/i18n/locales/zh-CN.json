@@ -1685,6 +1685,7 @@
     "status_priority": "优先 · 每周重置{{relative}}",
     "status_recorded": "记录于{{relative}}",
     "status_unavailable": "不可用",
+    "status_cooling": "冷却中 · {{relative}}重试",
     "weight": "权重 {{weight}}",
     "renews": "续订 {{absolute}} · {{relative}}",
     "use_reset": "使用一次重置",

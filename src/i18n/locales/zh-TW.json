@@ -1713,6 +1713,7 @@
     "status_priority": "優先 · 每週重置{{relative}}",
     "status_recorded": "記錄於{{relative}}",
     "status_unavailable": "無法使用",
+    "status_cooling": "冷卻中 · {{relative}}重試",
     "weight": "權重 {{weight}}",
     "renews": "續訂 {{absolute}} · {{relative}}",
     "use_reset": "使用一次重置",
