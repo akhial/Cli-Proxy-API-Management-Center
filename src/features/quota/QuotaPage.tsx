@@ -29,6 +29,7 @@ import { AccountsTable } from './accounts/AccountsTable';
 import { WEEKLY_RESET_STRATEGY } from './accounts/rowModel';
 import { maskEmails } from './emailMask';
 import { QuotaForecastSection } from './forecast/QuotaForecastSection';
+import type { PoolSummary } from './forecast/pools';
 import { useForecastPrefs } from './forecast/prefs';
 import {
   QUOTA_PAGE_SIZE,
@@ -80,6 +81,8 @@ export function QuotaPage() {
   const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
   // Recorded history, shared by the pool charts and the account rows.
   const [forecastHistory, setForecastHistory] = useState<QuotaHistory | null>(null);
+  // Pool figures from the charts, repeated in the account list's provider headers.
+  const [poolSummaries, setPoolSummaries] = useState<Record<string, PoolSummary>>({});
   // 页头 + tabs 的入场级联（标题 → meta → 动作 → tabs，级差 70ms）
   const revealRef = useRevealGroup<HTMLDivElement>();
 
@@ -393,6 +396,7 @@ export function QuotaPage() {
           onPrefsChange={updateForecastPrefs}
           refreshKey={historyRefreshKey}
           onHistory={setForecastHistory}
+          onPools={setPoolSummaries}
           enabled={!disableControls && filesGeneration === sessionGeneration}
           priorityRouting={priorityRouting}
           resolvedTheme={resolvedTheme}
@@ -482,6 +486,7 @@ export function QuotaPage() {
             quotaFor={getQuota}
             nameFor={accountNameFor}
             history={forecastHistory}
+            pools={poolSummaries}
             priorityRouting={priorityRouting}
             resolvedTheme={resolvedTheme}
             canUseActions={canUseActions}

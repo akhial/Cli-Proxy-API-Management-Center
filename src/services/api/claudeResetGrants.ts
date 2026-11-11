@@ -47,6 +47,11 @@ export interface AnthropicResetGrant {
   paused: boolean;
   usableNow: boolean;
   useRequiresLimit: boolean;
+  /**
+   * A Fable reset: it refills the Fable limit and returns what Fable used to the
+   * weekly limit, instead of clearing the account's limits.
+   */
+  givesBackWeekly: boolean;
   percentUsed: Partial<Record<AnthropicResetWindow, number>>;
 }
 
@@ -156,13 +161,16 @@ function parseGrant(value: unknown): AnthropicResetGrant | null {
   // say it is usable is not offered for spending.
   const usableNow = optionalBoolean(value.usable_now, false);
   const useRequiresLimit = optionalBoolean(value.use_requires_limit, true);
+  // What a reset does decides whether to spend it, so an unreadable flag rejects the grant.
+  const givesBackWeekly = optionalBoolean(value.gives_back_weekly, false);
   if (
     startsAt === undefined ||
     endsAt === undefined ||
     clears === undefined ||
     paused === undefined ||
     usableNow === undefined ||
-    useRequiresLimit === undefined
+    useRequiresLimit === undefined ||
+    givesBackWeekly === undefined
   )
     return null;
   return {
@@ -176,6 +184,7 @@ function parseGrant(value: unknown): AnthropicResetGrant | null {
     paused,
     usableNow,
     useRequiresLimit,
+    givesBackWeekly,
     percentUsed: parsePercentUsed(value.percent_used),
   };
 }

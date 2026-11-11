@@ -16,8 +16,23 @@ import {
   ResetGrantPreflightError,
   resetGrantFailureMessageKey,
 } from './resetGrantOperations';
+import { resetGrantKind, resetGrantLines, type ResetGrantKind } from './resetGrantKinds';
 import { selectResetGrant } from './selectResetGrant';
 import { readResetGrantsForCard, scheduleResetGrantRead } from './resetGrantReads';
+
+/** One kind of banked reset on an account, with the action that spends it. */
+export type ClaudeResetLine = {
+  /** Null only for an unresolved claim whose grant is no longer listed. */
+  kind: ResetGrantKind | null;
+  count: number | null;
+  expiresAtMs: number | null;
+  /** The action retries an unresolved claim instead of starting a new one. */
+  retry: boolean;
+  /** This line's claim is in flight. */
+  busy: boolean;
+  blocked: boolean;
+  confirm: () => void;
+};
 
 /** Card-owned reads; the session-scoped journal owns spending and ambiguous retries. */
 export function useClaudeResetGrants(
@@ -38,7 +53,9 @@ export function useClaudeResetGrants(
   const authIndex = normalizeAuthIndex(file.auth_index ?? file.authIndex);
   const key = JSON.stringify([file.name, authIndex]);
   const [status, setStatus] = useState<AnthropicResetGrantStatus | null>(null);
-  const [busy, setBusy] = useState(false);
+  // The grant being claimed; one claim runs at a time.
+  const [busyGrant, setBusyGrant] = useState<string | null>(null);
+  const busy = busyGrant !== null;
   const [message, setMessage] = useState('');
   const [reload, setReload] = useState(0);
   const lock = useRef(false);
@@ -79,16 +96,29 @@ export function useClaudeResetGrants(
   const operation = resetGrantOperations.inspect(key);
   const pending = operation && !operation.code ? operation : undefined;
   const expired = Boolean(pending && now - pending.createdAt >= RETRY_WINDOW_MS);
-  const selected = pending?.grantId ?? (status ? selectResetGrant(status, now)?.id : undefined);
-  const blocked = disabled || !sessionActive || !authIndex || busy || expired || !selected;
-  const confirm = () => {
-    if (blocked || lock.current || !selected || !authIndex) return;
+  const unavailable = disabled || !sessionActive || !authIndex || busy || expired;
+  const kindOf = (grantId: string | undefined): ResetGrantKind | null => {
+    const grant = status?.grants.find((candidate) => candidate.id === grantId);
+    return grant ? resetGrantKind(grant) : null;
+  };
+  const pendingKind = kindOf(pending?.grantId);
+  /** The grant a button spends. While a claim is unresolved, only that claim can be retried. */
+  const grantFor = (kind?: ResetGrantKind) => {
+    if (pending) return kind === undefined || kind === pendingKind ? pending.grantId : undefined;
+    return status ? selectResetGrant(status, now, kind)?.id : undefined;
+  };
+  const confirmGrant = (selected: string | undefined) => {
+    if (unavailable || lock.current || !selected || !authIndex) return;
     const version = generation.current;
     const current = () =>
       session === apiClient.getConnectionRevision() && version === generation.current;
+    const confirmText =
+      kindOf(selected) === 'fable'
+        ? 'claude_reset.confirm_text_fable'
+        : 'claude_reset.confirm_text';
     showConfirmation({
       title: t('claude_reset.title'),
-      message: t(pending ? 'claude_reset.retry_confirm' : 'claude_reset.confirm_text', {
+      message: t(pending ? 'claude_reset.retry_confirm' : confirmText, {
         name: file.name,
       }),
       confirmText: t(pending ? 'claude_reset.retry' : 'claude_reset.confirm'),
@@ -97,7 +127,7 @@ export function useClaudeResetGrants(
         if (!current() || lock.current || useAuthStore.getState().connectionStatus !== 'connected')
           return;
         lock.current = true;
-        setBusy(true);
+        setBusyGrant(selected);
         try {
           const answer = await resetGrantOperations.run(key, authIndex, selected);
           if (!current()) return;
@@ -130,19 +160,53 @@ export function useClaudeResetGrants(
           lock.current = false;
           // A concurrent page-wide refresh can invalidate this read generation.
           // Release the local lock regardless, but never refresh a replacement account.
-          setBusy(false);
+          setBusyGrant(null);
           setReload((value) => value + 1);
           if (current()) onRefresh();
         }
       },
     });
   };
+  const selected = grantFor();
+  const grantLines = resetGrantLines(status?.grants ?? [], now).map((line) => {
+    const grantId = grantFor(line.kind);
+    return {
+      ...line,
+      grantId,
+      retry: Boolean(pending) && line.kind === pendingKind,
+      busy: busy && grantId === busyGrant,
+      blocked: unavailable || !grantId,
+    };
+  });
+  // An unresolved claim keeps its retry even when its grant no longer shows resets.
+  const shownLines =
+    pending && !grantLines.some((line) => line.retry)
+      ? [
+          ...grantLines,
+          {
+            kind: pendingKind,
+            count: null,
+            expiresAtMs: null,
+            grantId: pending.grantId,
+            retry: true,
+            busy: busyGrant === pending.grantId,
+            blocked: unavailable,
+          },
+        ]
+      : grantLines;
+  const lines: ClaudeResetLine[] = shownLines.map(({ grantId, ...line }) => ({
+    ...line,
+    confirm: () => confirmGrant(grantId),
+  }));
   return {
     count: status?.grants.reduce((sum, grant) => sum + grant.resetsLeft, 0) ?? null,
     grants: status?.grants ?? [],
+    /** Whether the grants have been read; `lines` is empty until then. */
+    known: status !== null,
+    lines,
     busy,
-    blocked,
-    confirm,
+    blocked: unavailable || !selected,
+    confirm: () => confirmGrant(selected),
     message: pending ? (expired ? 'expired' : 'unknown') : message,
     buttonLabel: pending ? 'retry' : 'use',
   };
