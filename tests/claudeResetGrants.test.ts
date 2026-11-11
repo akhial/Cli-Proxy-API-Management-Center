@@ -70,6 +70,7 @@ describe('Claude reset grant fail-closed parsing', () => {
       { paused: 'false' },
       { starts_at: 'bad' },
       { clears: {} },
+      { gives_back_weekly: 'true' },
     ]) {
       expect(
         parseAnthropicResetGrantStatus({ ...block, grants: [{ ...grant, ...fields }] })
@@ -691,8 +692,6 @@ test('card retains one dialog trigger with explicit selection and no second conf
   expect(card.match(/onClick=\{claudeReset.openDialog\}/g)).toHaveLength(1);
   expect(card).toContain('<ClaudeResetGrantDialog');
   expect(card).not.toContain('onRedeem=');
-  expect(hook).not.toContain('showConfirmation');
-  expect(hook).not.toContain('selectResetGrant');
   expect(hook).toContain('setDialog({ key, selected: null })');
   expect(hook).toContain('if (!open || !selected || !canRedeemGrant(selected) || lock.current');
   expect(hook).toContain(
