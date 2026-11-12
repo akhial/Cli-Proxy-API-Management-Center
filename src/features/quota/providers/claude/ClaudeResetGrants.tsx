@@ -40,7 +40,9 @@ export function useClaudeResetGrants(
   enabled: boolean,
   disabled: boolean,
   refreshToken: unknown,
-  onRefresh: () => void
+  onRefresh: () => void,
+  /** Saved grants from quota history, shown until a live read replaces them. */
+  saved: AnthropicResetGrantStatus | null = null
 ) {
   const { t } = useTranslation();
   const connectionStatus = useAuthStore((state) => state.connectionStatus);
@@ -52,7 +54,8 @@ export function useClaudeResetGrants(
   const now = useNow();
   const authIndex = normalizeAuthIndex(file.auth_index ?? file.authIndex);
   const key = JSON.stringify([file.name, authIndex]);
-  const [status, setStatus] = useState<AnthropicResetGrantStatus | null>(null);
+  const [liveStatus, setStatus] = useState<AnthropicResetGrantStatus | null>(null);
+  const status = liveStatus ?? saved;
   // The grant being claimed; one claim runs at a time.
   const [busyGrant, setBusyGrant] = useState<string | null>(null);
   const busy = busyGrant !== null;
