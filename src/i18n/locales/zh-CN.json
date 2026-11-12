@@ -1709,6 +1709,7 @@
     "resets_none": "无",
     "use_reset_general": "使用一次通用重置",
     "use_reset_fable": "使用一次 Fable 重置",
+    "use_reset_fable_ready": "Fable 已用完：现在使用 Fable 重置",
     "resets_in": "{{duration}}后重置",
     "pool_capacity": "额度池共 {{capacity}}"
   },
