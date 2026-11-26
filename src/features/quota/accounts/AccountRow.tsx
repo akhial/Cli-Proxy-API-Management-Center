@@ -115,9 +115,13 @@ export function AccountRow(props: AccountRowProps) {
       : boosted
         ? {
             tone: 'priority',
-            text: t('quota_accounts.status_priority', {
-              relative: formatRelativeInstant(weeklyReset as number, now, locale),
-            }),
+            // The backend can rank a credential whose weekly reset this row does not know.
+            text:
+              weeklyReset !== null
+                ? t('quota_accounts.status_priority', {
+                    relative: formatRelativeInstant(weeklyReset, now, locale),
+                  })
+                : t('quota_accounts.status_priority_only'),
           }
         : (routing.status === 'cooling' || routing.status === 'unavailable') &&
             routing.until !== null

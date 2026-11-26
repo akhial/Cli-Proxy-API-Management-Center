@@ -13,6 +13,7 @@ import {
   type CredentialStatus,
 } from '@/features/quota/accounts/rowModel';
 import type { QuotaHistoryAccount } from '@/services/api/quotaHistory';
+import { buildAntigravityQuotaGroups } from '@/utils/quota';
 import type { AuthFileItem } from '@/types/authFile';
 
 const t = ((key: string) => key) as unknown as TFunction;
@@ -113,6 +114,43 @@ describe('account row cells', () => {
       },
     ]);
     expect(weeklyResetMs('codex', cells)).toBe(NOW + 30 * H);
+  });
+
+  test("read Antigravity's weekly reset from its Gemini pool, not the Claude/GPT one", () => {
+    const bucket = (id: string, window: string, resetH: number) => ({
+      bucketId: id,
+      window,
+      remainingFraction: 0.9,
+      resetTime: new Date(NOW + resetH * H).toISOString(),
+    });
+    const groups = buildAntigravityQuotaGroups({
+      groups: [
+        {
+          displayName: 'Claude and GPT models',
+          buckets: [bucket('claude-weekly', 'weekly', 20), bucket('claude-5h', '5h', 1)],
+        },
+        {
+          displayName: 'Gemini Models',
+          buckets: [bucket('gemini-weekly', 'weekly', 160), bucket('gemini-5h', '5h', 3)],
+        },
+      ],
+    });
+    const cells = liveWindowCells('antigravity', { status: 'success', groups }, t);
+    // Only the Gemini pool is shown: Antigravity serves Gemini requests only.
+    expect(cells.map((cell) => cell.id)).toEqual([
+      'gemini-models:gemini-5h',
+      'gemini-models:gemini-weekly',
+    ]);
+    expect(weeklyResetMs('antigravity', cells)).toBe(NOW + 160 * H);
+    // Without a Gemini weekly bucket the reset is unknown, never the epoch.
+    expect(weeklyResetMs('antigravity', cells.slice(0, 1))).toBeNull();
+    // Accounts without a Gemini group keep every bucket.
+    const others = liveWindowCells(
+      'antigravity',
+      { status: 'success', groups: groups.slice(0, 1) },
+      t
+    );
+    expect(others).toHaveLength(2);
   });
 
   test('leave out recorded windows the credential no longer reports', () => {

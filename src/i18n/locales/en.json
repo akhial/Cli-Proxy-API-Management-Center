@@ -1749,6 +1749,7 @@
     "no_reset": "No reset pending",
     "load_quota": "Load quota",
     "status_priority": "Priority · weekly reset {{relative}}",
+    "status_priority_only": "Priority",
     "status_recorded": "Recorded {{relative}}",
     "status_unavailable": "Unavailable",
     "status_cooling": "Cooling down · retry {{relative}}",

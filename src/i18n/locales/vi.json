@@ -1694,6 +1694,7 @@
     "no_reset": "Không có lần đặt lại",
     "load_quota": "Tải hạn mức",
     "status_priority": "Ưu tiên · đặt lại tuần {{relative}}",
+    "status_priority_only": "Ưu tiên",
     "status_recorded": "Ghi nhận {{relative}}",
     "status_unavailable": "Không khả dụng",
     "status_cooling": "Đang tạm nghỉ · thử lại {{relative}}",

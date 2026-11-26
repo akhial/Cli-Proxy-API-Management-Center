@@ -1749,6 +1749,7 @@
     "no_reset": "예정된 초기화 없음",
     "load_quota": "할당량 불러오기",
     "status_priority": "우선 · 주간 초기화 {{relative}}",
+    "status_priority_only": "우선",
     "status_recorded": "{{relative}} 기록",
     "status_unavailable": "사용 불가",
     "status_cooling": "쿨다운 · {{relative}} 재시도",

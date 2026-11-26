@@ -21,9 +21,14 @@ export type AccountWindowCell = {
   /** Percent remaining, 0..100. */
   remaining: number | null;
   resetAtMs: number | null;
+  /** Window length, where the provider states it (Antigravity buckets). */
+  periodHours?: number | null;
 };
 
 export type AccountColumn = { id: string; label: string };
+
+/** Antigravity's Gemini group ("Gemini Models" → `gemini-models`), also as a cell id prefix. */
+const isGeminiGroup = (id: string) => /^gemini/i.test(id);
 
 /** Routing strategy that spends weekly quota in the order it would expire (backend fork). */
 export const WEEKLY_RESET_STRATEGY = 'weekly-reset-weighted-round-robin';
@@ -132,16 +137,21 @@ export function liveWindowCells(
               label: string;
               remainingFraction: number;
               resetAtMs?: number | null;
+              periodHours?: number | null;
             }[];
           }[];
         }
       ).groups ?? [];
-    return groups.flatMap((group) =>
+    // Antigravity serves Gemini requests only, so its rows show just the Gemini pool.
+    const gemini = groups.filter((group) => isGeminiGroup(group.id));
+    const shown = type === 'antigravity' && gemini.length > 0 ? gemini : groups;
+    return shown.flatMap((group) =>
       group.buckets.map((bucket) => ({
         id: `${group.id}:${bucket.id}`,
         label: bucket.label || group.label,
         remaining: finite(bucket.remainingFraction) ? clamp(bucket.remainingFraction * 100) : null,
         resetAtMs: finite(bucket.resetAtMs) ? bucket.resetAtMs : null,
+        ...(finite(bucket.periodHours) && { periodHours: bucket.periodHours }),
       }))
     );
   }
@@ -231,10 +241,16 @@ const WEEKLY_WINDOW_ID: Partial<Record<QuotaProviderType, string>> = {
   codex: 'weekly',
 };
 
+const WEEK_HOURS = 24 * 7;
+/** Antigravity's routed quota is its Gemini pool: cells `<group>:<bucket>` of the Gemini group. */
+const isAntigravityGeminiWeekly = (cell: AccountWindowCell) =>
+  isGeminiGroup(cell.id) && cell.periodHours === WEEK_HOURS;
+
 export const weeklyResetMs = (
   type: QuotaProviderType,
   cells: AccountWindowCell[]
 ): number | null => {
+  if (type === 'antigravity') return cells.find(isAntigravityGeminiWeekly)?.resetAtMs ?? null;
   const id = WEEKLY_WINDOW_ID[type];
   return cells.find((cell) => cell.id === id)?.resetAtMs ?? null;
 };
