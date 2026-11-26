@@ -1767,6 +1767,7 @@
     "no_reset": "Сброс не ожидается",
     "load_quota": "Загрузить квоту",
     "status_priority": "Приоритет · недельный сброс {{relative}}",
+    "status_priority_only": "Приоритет",
     "status_recorded": "Записано {{relative}}",
     "status_unavailable": "Недоступен",
     "status_cooling": "Пауза · повтор {{relative}}",

@@ -2657,6 +2657,7 @@
     "no_reset": "無待重置",
     "load_quota": "載入額度",
     "status_priority": "優先 · 每週重置{{relative}}",
+    "status_priority_only": "優先",
     "status_recorded": "記錄於{{relative}}",
     "status_unavailable": "無法使用",
     "weight": "權重 {{weight}}",

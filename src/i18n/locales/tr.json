@@ -1749,6 +1749,7 @@
     "no_reset": "Bekleyen sıfırlama yok",
     "load_quota": "Kotayı yükle",
     "status_priority": "Öncelik · haftalık sıfırlama {{relative}}",
+    "status_priority_only": "Öncelik",
     "status_recorded": "{{relative}} kaydedildi",
     "status_unavailable": "Kullanılamıyor",
     "status_cooling": "Soğumada · yeniden deneme {{relative}}",
